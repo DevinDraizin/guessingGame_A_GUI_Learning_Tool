@@ -76,169 +76,706 @@ import java.util.Random;
 // If you are coming from a C background than what you need to know about classes is that they contain 2 main
 // things, member variables, and methods. Methods are essentially just functions and member variables are just
 // variables outside those methods that can be accessed and sometimes modified by the methods in the class.
-// Similarly to C, I will create all the member variables at the top of the class and write the mthods below.
+// Similarly to C, I will create all the member variables at the top of the class and write the methods below.
 
 public class guessingGame extends Application
 {
-    
-    final Integer maxGuesses = 13;
-    final Integer upperBound = 10000;
-    final Integer lowerBound = 1;
 
+    // These three variables are pretty self explanatory, they will store the
+    // largest lower and upper bound as well as how many guesses the user should
+    // have before they lose. In you will also notice 'int' and 'final'
+    // preceding these variables. int is just the datatype of these variables
+    // If you are familiar with C they are the same as the int type you know.
+    // They just store an integer number including negative numbers.
+    // The 'final' keyword is another OOP principle but the big idea is
+    // that variables declared using the 'final' keyword cannot ever be changed
+    // during runtime. This means writing a statement like 'upperBound = 4' anywhere
+    // outside of the declaration itself will result in an exception being thrown and
+    // the program crashing.
+    //
+    // You can feel free to change these and see how changing your search interval
+    // affects how many guesses you need to play optimally and still win every time.
+    // A warning is that the program will not check for nonsense values such as an
+    // upperBound that is less than the lowerBound so tinker at your own discretion.
+    //
+    // HINT: If you are unsure about how many guesses you should have for a given
+    //       interval you can use the formula log2(n) where n = upperBound - lowerBound
+    //
+    // After you get comfortable playing the game I recommend playing with these settings:
+    // maxGuesses = 13
+    // upperBound = 10000
+    // lowerBound = 1
+    // It is really fun and you get to flex your quick division skills
+    final int maxGuesses = 13;
+    final int upperBound = 10000;
+    final int lowerBound = 1;
+
+    // If the game is a bit too hard or you just want to give yourself a sanity check
+    // I added a feature that calculates the optimal next guess and displays it on the
+    // UI. When 'cheatMode' is set to true, the program will display the the optimal
+    // guess to the user and when it is set to false it will be hidden. If you are coming
+    // from the C programming language you might not have seen 'boolean' unless you are
+    // using stdbool.h. In Java we have the 'boolean' type built in and it acts just as
+    // you would expect (either true or false). All standard boolean operators work with
+    // this type as well (> < <= >= != ==).
     final boolean cheatMode = true;
 
+    // The 'Random' class has a bunch of methods we can use to generate all types of
+    // sudo random numbers. Here we are creating a new instance of Random called 'rnd'.
+    // This will be used later to generate our randomly generated answer each round
+    Random rnd = new Random();
+
+    // This variable will simply store the correct answer for the current round
+    Integer answer;
+
+    // This variable will store whether the current round is over or not
+    boolean gameOver;
+
+
+    // If you are reading this file in order I suggest continuing to read at the
+    // 'main' method in this class before reading this. If you already read that
+    // go ahead and keep going from here.
+    //
+    // So now we know we have a 'Stage' which will be our canvas, next we need
+    // things to go on that stage. JavaFX represents GUIs as big 'trees' with
+    // a root node and children nodes that branch from the root. Everything we
+    // do from here will be a part of our Stage 'window'. If we want to build
+    // a game than we will need to display information to the user, Labels are
+    // great component to accomplish that. They can display text, be styled, and
+    // can even change dynamically as the program is running. We will use labels
+    // to do most of the work in our program.
+    //
+    // Hopefully the variable names are self explanatory. When we create these
+    // labels they don't actually exist on our GUI yet, we will need to put them
+    // there. But we can do that anytime we want and we can also configure them
+    // however we want before, during, or after we decide where on the GUI to put
+    // these labels. When we create a label using 'new Label()' you will
+    // notice that nothing is going inside the parenthesis this means that we want
+    // a default label that doesnt say or so anything. In fact if we just create
+    // a label and add it to the GUI we wouldn't actually know it's there because
+    // it would match the background and have no text. If we know what we want the
+    // label to say initially we can add a string inside the argument of 'Label()'.
+    // In 'cheatLabel' that is exactly what we are doing it's saying start with the
+    // text Cheat: [value] where value is (upperBound-lowerBound)/2 + 1 since the first
+    // optimal guess will always be half of the interval and the plus 1 to round up the
+    // integer division. Now we will talk about 'inputField'
     Label lowerBoundLabel = new Label();
     Label upperBoundLabel = new Label();
     Label guessesLabel = new Label();
     Label guessResponseLabel = new Label();
-    Label cheatLabel = new Label("Cheat: 5000");
+    Label cheatLabel = new Label("Cheat: " + (((upperBound-lowerBound)/2)+1));
 
+
+    // The 'TextField' component is your standard text box where you can type into.
+    // There is another component called a 'TextArea' which is essentially a larger
+    // version of a TextField where the user can type longer inputs. This specific
+    // text field will be how the user enters their guess. Now we will talk about
+    // our integer properties.
     TextField inputField = new TextField();
 
+
+    // SimpleIntegerProperty is a class that will wrap around a normal integer.
+    // One of the features of this class is it allows us to use a technique called
+    // 'Binding' where we attach the value of the integer to another property elsewhere.
+    // The best example is also how we will use them in this program. Let's say we create
+    // a label that will display how many guesses a user has remaining. Everytime the user
+    // made a move we could change the guesses left value and then make sure that any labels
+    // using that value also get updated. This method would work but it clunky and is
+    // not really best practice. Since we want the label to always reflect the value
+    // we can use a 'SimpleIntegerProperty' that will give the label a way to listen in
+    // on any changes that happen to the value and automatically update in the background.
+    // we will see how to use these properties later on but here we are just creating them.
+    // Before moving on, I want to point out a design decision I made when creating the
+    // project. So far we are creating a lot of UI components as member variables in
+    // the class. We could have also created these components locally in a function and
+    // for some of the components we will. The Labels, Text Field, and integer properties
+    // were created as member variables because they will be constantly referenced by many
+    // methods but more importantly, the reflect what the game 'is' and so they should be
+    // member variables. This is not the only way to accomplish this and technically I could
+    // create local versions of all of these variables in the start method and pass them
+    // around to all the functions as arguments (This would be very bad practice (see loosely
+    // coupled code for why this is a bad idea)).
+    //
+    // At this point lets jump back down to the start method where we left off.
     SimpleIntegerProperty guessesLeft = new SimpleIntegerProperty();
     SimpleIntegerProperty currentUpperBound = new SimpleIntegerProperty();
     SimpleIntegerProperty currentLowerBound = new SimpleIntegerProperty();
-    Random rnd = new Random();
-    Integer answer;
 
-    boolean gameOver;
 
-    public void start(Stage window)
-    {
-        initializeGame();
-
-        window.setTitle("Guessing Game");
-        window.setHeight(460);
-        window.setWidth(500);
-
-        BorderPane mainLayout = new BorderPane();
-        mainLayout.setPadding(new Insets(20,10,20,10));
-
-        mainLayout.setTop(getTopContainer());
-        mainLayout.setCenter(getCenterContainer(window));
-
-        Scene scene = new Scene(mainLayout);
-        window.setScene(scene);
-        mainLayout.requestFocus();
-        window.show();
-    }
-
+    // If you are familiar with C than you should have a good idea about what main is and
+    // java is almost the same. Every program written in Java will have a 'main' method and
+    // ever program can only have one method named main. It is the starting point for every
+    // program so naturally when we talk about the game running we will begin here. To start
+    // with you might notice the 'public static' keywords, those are both OOP concepts so I
+    // will save talking about those for the TicTacToe project. For now just know that every
+    // java program MUST have the main method and it must be declared as 'public static void
+    // main(String[] args). For those of you unfamiliar, methods are almost identical to
+    // functions in C meaning they always have a return type, a name, and a list of arguments.
+    // For the main method we don't need to return anything so we use 'void' as the return type
+    // and we pass in a list of strings called 'args'. 'args' are actually your command line
+    // arguments so if you run in a command line or configure your IDE, you can have your program
+    // run differently by passing in special arguments. For this program we really only want to do
+    // 1 thing, create our GUI and that's what main is doing here. We just call the 'launch' method
+    // and pass it whatever arguments are passed into main. 'launch' is a method that is defined
+    // inside 'Application'. When we extended from Application we inherit everything it can do
+    // which includes calling it's 'launch' method. This method will do a few things but the most
+    // important to us is calling the 'start' method. I know it seems like it's just passing the
+    // buck off to another method but 'launch' does a lot more than call 'start'. At this point
+    // I will go on to 'start'.
     public static void main(String[] args)
     {
         launch(args);
     }
 
+    // Ok so now that 'launch' has called the 'start' method you will notice that it too is a
+    // method that returns nothing (void) but this time receives a variable called 'window' as
+    // an argument. 'window' is of type 'Stage' and it is supplied to us from inside the 'launch'
+    // method. Stage is a class in JavaFX that acts as our 'Window' it can't do much on its own
+    // other than be shown and hold more complex components but it is our starting place. Think of
+    // it as a blank canvas and by default if you just run 'start' with nothing in it there will
+    // actually be a window that pops up. Before we go into this function Im going to make you jump
+    // back up to the labels right below our 'gameOver' variables. After you read that come back
+    // here.
+    //
+    // Now that we have gone over the member variables lets jump into the actual game logic and
+    // UI design.
+    public void start(Stage window)
+    {
+        // Before we even set up the UI lets go ahead and initialize all of the game variables
+        // Jump down to the 'initializeGame' method next.
+        initializeGame();
+
+        // Now that initializeGame has been called we are ready to start building the GUI!
+        // if we commented out the rest of the code in this method after initializeGame()
+        // we would just see an empty window pop up. Even though our labels are initialized
+        // and bound, the stage does not have any reference to them. Let's begin by setting up
+        // our Stage 'window'. If you have run the program at this point you will notice that
+        // it already sort of looks like a window you'd see on any program. In fact you will
+        // notice that even the 'quit', 'minimize', and 'fullscreen' buttons are present and
+        // match other windows. This is because JavaFX uses your operating systems native
+        // graphics toolkit to build these windows. This also means that if you give your friend
+        // a copy of your program the window will match their operating systems default style!
+        // Unfortunately and fortunately for you this means you will not get to see all of the
+        // pixels and display hardware under the hood necessary to really build a GUI from scratch,
+        // but we also do not have to worry about any of that which is good because if we did we would
+        // need a lot more time. The default window will automatically resize if you drag a corner,
+        // the 3 buttons in the top corner will be there and work like normal as well. JavaFX also
+        // provides us with a few other options we can use using the 'initStyle' method built into
+        // Stage. If we really did want a completely blank white square that did nothing we could
+        // do something along the lines of 'window.initStyle(StageStyle.UNDECORATED);'. I encourage
+        // you to look up some of the other 'StageStyles' JavaFX provides in your own time. For now
+        // we will stick to the default. The next 3 lines will set the text at the top of the window
+        // as well as set the default height and width of the window (the window will still be able
+        // to be resized outside of these initial sizes). The numbers I pass to the setHeight and
+        // setWidth methods are in pixels.
+        window.setTitle("Guessing Game");
+        window.setHeight(460);
+        window.setWidth(500);
+
+        // Now that our stage is set (pun not intended) there are 2 more things we need for us to have
+        // a normal GUI, a scene, and a container. A stage is essential but you wouldn't just start placing
+        // random props on a stage and so we need a scene. There is one scene per stage at anyone time however
+        // you can have more than one scene and swap the in and out of the stage at will. These scenes are
+        // fantastic for making large UIs that can change however to actually start placing components like
+        // labels, buttons, and text fields, we will need a container. There are many containers but they all
+        // pretty much do the same thing, provide rules for showing the components we add. The most basic
+        // container is simply a 'Pane' and if you only want to display 1 component and dont really care where
+        // on the screen it goes, panes are great. There are also a bunch more such as GridPanes, BorderPanes,
+        // HBoxes, VBoxes, and more. All of them hold components and provide handy ways to organize and show them.
+        // For this application we will use a 'BorderPane'. The only thing a border pane does is provide us
+        // a Top, Bottom, Left, Right, and Center area for us to place components. It is an all around good
+        // container that in my opinion really helps when laying out a GUI. For example think of the last
+        // desktop app you used, it probably had a sidebar with some options, maybe a search bar and some
+        // buttons at the top, in the center your main controls, and maybe a tool bar at the bottom. This is
+        // exactly what a BorderPane is. In these 2 lines we will create a new BorderPane called 'mainLayout'
+        // and then we will set the padding. Inside the padding we create some insets and do '20,10,20,10'
+        // what im doing here is saying "Please add some padding on all sides of my BorderPane, specifically
+        // 20 pixels at the top, 10 on the right, 20 on the bottom, and 10 on the left." If we did not add
+        // padding and we inserted a component like a button it would be at the very edge of the window.
+        // this is just some default spacing so things dont get too close to the edge.
+        BorderPane mainLayout = new BorderPane();
+        mainLayout.setPadding(new Insets(20,10,20,10));
+
+        // Sow now that we know we are using the BorderPane lets talk about how we want to layout the
+        // app. If you have run this code then you know there are really 2 main sections, the title/
+        // stats part, and the user input part below. We could split it up into 3 sections, top, center,
+        // and bottom but I think we can get away with just using the top and the Center. Lets begin
+        // by populating the top part of the BorderPane. To do this we will use another container (
+        // yes you can have containers inside containers). When we call 'setTop, setRight, etc' on a
+        // border BorderPane we need to give it a 'Parent' to actually place there. A 'Parent' can be
+        // any component but usually it is another container that hold other components. The great thing
+        // about developing a GUI like this is, we can make the GUI really modular and only worry about
+        // small parts at a time. You'll notice that inside of 'setTop' I call another method 'getTopContainer'
+        // this new method returns a 'Parent' component (Specifically a VBox). with everything inside already
+        // configured and set up. Let's hop down to 'getTopContainer'.
+        mainLayout.setTop(getTopContainer());
+
+
+        // Now the top part of the BorderPane is set using the 'headerContainer' we just created
+        // inside the 'getTopContainer' method. Let's do the same thing with the center part
+        // of the borderPane by calling our 'getCenterContainer' method. Notice that this time
+        // our method takes in the 'window' argument. Window is our 'Stage' and the reason we are
+        // passing it in this method is that part of the center is a button to actually close
+        // the application. To do that we will need a reference back to the window itself.
+        // Jump down to the 'getCenterContainer' method.
+        mainLayout.setCenter(getCenterContainer(window));
+
+        // Ok! that is almost everything we need for the GUI! all that's left is some game logic
+        // and we are done! Before jumping into the game logic lets go over the last bit of the
+        // GUI part. You might have noticed up until now ive mentioned a 'Scene' but never actually
+        // made one. Well here is the scene! When creating a scene you have to give it a container
+        // to start with so we will just give it our BorderPane 'mainLayout'.
+        Scene scene = new Scene(mainLayout);
+
+        // Now we give our new Scene to the stage 'window' using the 'setScene' method
+        window.setScene(scene);
+
+        // This next line isn't 100% necessary but useful to see at least once. Using GUIs you
+        // know that components such as buttons or text fields can be 'focussed'. This is that
+        // blue outline on a button or the blinking carrot inside a text area. A little visual
+        // confirmation that the user is interacting with a specific component. If you have no idea
+        // what im talking about go to your favorite desktop application and start pressing the tab
+        // key. You might see an outline cycling through all the interactive components on the UI.
+        // By JavaFX usually will focus the first selectable component by default which in our case
+        // is the text field. That isn't a problem but if you remember we set a prompt text in our
+        // text field 'Enter a Guess' but when selected that prompt will be hidden. It would be
+        // kinda silly if the user doesnt see that until they click something else so we will manually
+        // move the focus to something else. In this case Im moving the focus to the BorderPane itself
+        // which is nice because containers don't usually have a visual change when focussed so to
+        // the user the UI will look nice and fresh (unselected) when the program starts.
+        mainLayout.requestFocus();
+
+        // Now lets tell the stage to show itself!!!
+        window.show();
+
+        // If you made it here than congratulations! you've seen how to build a GUI in JavaFX!
+        // we are not completely done but I have covered almost all the basics you need to know.
+        // from here I will jump down to the 'GuessNum' method and talk about the game logic
+    }
+
+
+    // This is a simple method taking no arguments and returning nothing. Our goals are
+    // to set everything up we need before the game begins. To do this we need to generate
+    // an actual answer the user should guess, initialize all of the variables to their
+    // default values and bind all of the labels to their integer values.
     void initializeGame()
     {
+        // 'answer' declared as a member variable above should be a random number in
+        // between our two bounds. We call the 'nextInt' method from our random number
+        // generator 'rnd', and pass it our upper bound to first get a number between
+        // 0 and our upper bound. then we add the lower bound to make sure it does not
+        // get a value less than our lower bound.
         answer = rnd.nextInt(upperBound)+lowerBound;
+
+        // These 3 variables are our SimpleIntegerProperties we declared above. Remember
+        // these are 'wrappers' so we can set their internal value using the 'setValue'
+        // method. From now on whenever we want to actually get the value or change it
+        // we will do things like 'guessesLeft.getValue()' or 'guessesLeft.setValue()'.
         currentUpperBound.setValue(upperBound);
         currentLowerBound.setValue(lowerBound);
         guessesLeft.setValue(maxGuesses);
+
+        // To start we want the gameOver boolean to be set to false
         gameOver = false;
 
+        // This is where the binding magic I was talking about earlier happens. Here
+        // we take each label we will use for displaying information to the user and
+        // bind it to it's respective SimpleIntegerProperty. Notice that we use the
+        // 'textProperty' that each label already has to bind to. What this is saying
+        // is "get the property that handles listening to the text on our labels and
+        // bind that text property to the integer property of these int variables" or
+        // in simpler terms, "if there are any changes to the values our integers please
+        // automatically update the text in our labels to reflect that change". Once these
+        // properties are bound they are permanent unless we manually overwrite or remove
+        // them somewhere else in the program. Also notice that at this point we have not
+        // even done anything to our Stage 'window'. We can do whatever we want to the labels
+        // and they will exist and be happy. Once we attach them to our Stage then they will
+        // be displayed.
         lowerBoundLabel.textProperty().bind(currentLowerBound.asString());
         upperBoundLabel.textProperty().bind(currentUpperBound.asString());
         guessesLabel.textProperty().bind(guessesLeft.asString());
+
+        //Lets jump backup to where we left off at in the 'start' method now
     }
 
+    // Ok so this method will be in charge of getting the upper portion of the GUI all set
+    // up and organized inside a VBox so we can just pop it into the 'setTop' method in
+    // 'start'. A VBox is one of the most simple containers we have available and it is
+    // just a 'Vertical Box' when you place components inside they will get stacked
+    // vertically in the order they are placed. We also have some nice methods for
+    // aligning those components horizontally (Left, Center, Right) and even adjust the
+    // spacing between the components are adjustable. An HBox is just the same as a VBox
+    // only horizontal stacking instead of vertical.
+    //
+    // For the top part of our game we will want a Title and a Label that tells the user
+    // about their last guess and where the current bounds are based off their guess.
+    // I will also show you some ways to style your labels to make them look really
+    // great!
     VBox getTopContainer()
     {
+        // These 2 lines are creating our VBox container that we will call 'headerContainer'
+        // setting the default spacing between each component to 40 pixels, and setting the
+        // default alignment to Center since we would like to have the labels centered in
+        // the GUI.
         VBox headerContainer = new VBox(40);
         headerContainer.setAlignment(Pos.CENTER);
 
+        // What I'd like the UI to look like is we have 4 labels stacked like this:
+        // 1. A centered title 'Guessing Game'
+        // 2. A Label that says 'Enter a number between [x] and [y] where x and y
+        //    are our lower and upper bounds respectively.
+        // 3. A label that will show a message saying whether the users guess was
+        //    too high or too low.
+        // 4. A Guesses Left Label that always displays how many guesses the user has
+        //    left in a given round.
+        // The tricky bit here is I would like the label to be dynamic in a few ways.
+        // Specifically, I want the [x] and [y] parts of the label to be a different
+        // color so the user can easily see the bounds so we will need to split up
+        // the label. I'll show how to do that here.
+        //
+        // The 'header' label is pretty strait forward, the actual title here!
         Label header = new Label("Guessing Game");
+
+        // These labels are how we are going to construct our bounds
+        // label. To actually make what we need we will actually use a bunch
+        // of labels and them stack them side by side. This my seem a bit wonky
+        // and of course there are different ways to do this but this is the
+        // simplest using basic components. Reading the prompts for our labels
+        // i'm sure you can see my plan. Ill place the 'desc1' label then the
+        // lowerBoundsLabel we created as a member variable up above, then 'desc2'
+        // and finally our upper bounds label. We will see how to place them later
         Label desc1 = new Label("Enter a number between");
         Label desc2 = new Label("and");
-        Label desc3 = new Label("Guesses Left:");
 
+        // This is the label that will represent how many guesses we have left and
+        // it will be placed to the left of our 'guessesLeftLabel' up above.
+        Label guessesLeftLabel = new Label("Guesses Left:");
 
+        //This may seem like a jumbled mess but actually  this is one of JavaFXs
+        // coolest features. JavaFX supports styling components a few different ways.
+        // We could use normal Java code and I could create Color objects and Font
+        // objects and set all of the components properties. That would work but as you
+        // could imagine it would be a lot of code and hard to change later on. If you
+        // have ever done web development than you might be familiar with CSS which
+        // are Cascading Style Sheets. If you are not familiar these are a great way
+        // to assign a structured style to a program from giving a default style to all
+        // buttons, down to applying a specific font size to a label. JavaFX supports
+        // Using CSS along side it's own markup language called FXML. I won't go into
+        // too much detail about FXML in this project (See TicTacToe Program) but I do
+        // want to highlight one very helpful feature. We can nest CSS directly into a
+        // components stylesheet. These can be pretty in depth but for now just know that
+        // we can overwrite any style we want by writing CSS inline like we see below
+        // and the component will reflect our style. This is perfect for on the fly, quick
+        // style changes. Of course JavaFX also supports CSS classes and everything else
+        // but that will be for another time. For now I want to take all of the labels
+        // and apply styles to make the font size bigger and change the color of the text.
+        // You can see the CSS we will use below and I encourage you to look at some of
+        // the awesome things you can do with CSS in JavaFX. You might notice that I when
+        // I set the text color using '-fx-text-fill:' you can specify the name of the color
+        // or the Hex color code. CSS supports a huge amount of colors by name as well as
+        // common color formats like RGB or Hex and many more.
+        //
+        // As far as our game goes here we are just going to change the size and color
+        // of each label to make the numbers pop a little more as well as make everything
+        // a little bit nicer. Go ahead and play around with these on your own to make some
+        // funky styles.
         header.setStyle("-fx-font-size: 28; -fx-text-fill: BLUE");
+
         lowerBoundLabel.setStyle("-fx-font-size: 20; -fx-text-fill: GREEN");
         upperBoundLabel.setStyle("-fx-font-size: 20; -fx-text-fill: GREEN");
+
         desc1.setStyle("-fx-font-size: 18; -fx-text-fill: #243556");
         desc2.setStyle("-fx-font-size: 18; -fx-text-fill: #243556");
-        desc3.setStyle("-fx-font-size: 16; -fx-text-fill: BLUE");
+
+        guessesLeftLabel.setStyle("-fx-font-size: 16; -fx-text-fill: BLUE");
         guessesLabel.setStyle("-fx-font-size: 16; -fx-text-fill: PURPLE");
         cheatLabel.setStyle("-fx-font-size: 16; -fx-text-fill: steelblue");
 
-        HBox guessesLeftContainer = new HBox(10);
-        guessesLeftContainer.setAlignment(Pos.CENTER);
-
-        guessesLeftContainer.getChildren().addAll(desc3, guessesLabel);
-
+        // Above I told you that we need multiple labels and we want to stack them side by side
+        // some of you might have already guessed but we will be using the HBox container to
+        // accomplish this. The 'descriptionContainer' will store the labels like this:
+        // 'Enter a number between' [lower bound] 'and' [upper bound]. So we will create a new
+        // HBox called 'descriptionContainer', set the spacing to 10 in between each component
+        // and then set the alignment to center.
         HBox descriptionContainer = new HBox(10);
         descriptionContainer.setAlignment(Pos.CENTER);
 
+        // To add the labels to the HBox we use the 'getChildren()' method which gives us
+        // an editable list of all the current components the HBox has in it. Once we have
+        // that Children list we call 'addAll()' to add our labels to that list. We could also
+        // use the 'add()' method if we wanted to add them individually or we only had 1 component
+        // to add.
         descriptionContainer.getChildren().addAll(desc1,lowerBoundLabel, desc2, upperBoundLabel);
 
+        // Same deal for the 'guessesLeftContainer'. We just want to combine the guessesLeft label
+        // we created with the label that holds the actual value we created as a member variable.
+        HBox guessesLeftContainer = new HBox(10);
+        guessesLeftContainer.setAlignment(Pos.CENTER);
+
+        guessesLeftContainer.getChildren().addAll(guessesLeftLabel, guessesLabel);
+
+
+        // At this point we have a bunch of styled labels all styled and added into 2 different HBoxes. now
+        // we need to add them into our master VBox 'headerContainer'. Just like the HBoxes we will add
+        // the header label ("Guessing Game"), the descriptionContainer which is the HBox storing our bounds,
+        // the guess response label, and then finally the guessesLeftContainer which is our HBox storing our
+        // guesses left labels.
         headerContainer.getChildren().addAll(header,descriptionContainer, guessResponseLabel,guessesLeftContainer);
 
-        if(cheatMode)
+        // If cheatMode boolean is set to true we also want to add the cheat label to the UI.
+        // If this is set to false, this if statement will not execute and the cheat label will
+        // still exist but since it is not added to our GUI we will not see it.
+        if(cheatMode == true)
         {
             headerContainer.getChildren().add(cheatLabel);
         }
 
+        // The only thing left is to return our VBox 'headerContainer' back to the start method!
+        // lets jump back to start where we left off
         return headerContainer;
     }
 
+    // This is going to be very similar to the getTopContainer we just saw so by now you should
+    // recognize that we will start with creating our 'Parent' container (a VBox), populate it
+    // with all of our components and then return it like before. The only thing left on our GUI
+    // is to add some buttons and the text field for the user to enter a guess. Also this is the
+    // first time we are seeing GUI components that a user can interact with so I will break
+    // everything down. First let's talk about what we want things to look like. We need 4 things:
+    // 1. A textField for the user to enter their guess
+    // 2. A Button for the user to press when they have entered a guess in the textField
+    // 3. A Button for the user to press to reset the game (a new game button)
+    // 4. A Button for the user to press to close the application
+    // Now that we know what we need what would be nice is to have the text field centered on the
+    // screen right below the labels. Underneath that we want all three buttons centered but side
+    // by side horizontally.
     VBox getCenterContainer(Stage window)
     {
+        // Since we are stacking 2 major things, the textField and out buttons,
+        // we need a VBox. 'mainContainer' will be our main container we eventually
+        // return so this will hold everything.
         VBox mainContainer = new VBox(40);
         mainContainer.setAlignment(Pos.CENTER);
 
+        // Since we want to hold all 3 buttons side by side horizontally we need a HBox.
+        // 'buttonBox' will be that container.
         HBox buttonBox = new HBox(20);
         buttonBox.setAlignment(Pos.CENTER);
 
+        // This is how you create Buttons in JavaFX (easy peasy). The text in 'Button()'
+        // will be the text displayed on the button but this text can be left blank or
+        // changed later.
         Button closeButton = new Button("Close");
         Button guessButton = new Button("Guess");
         Button newGameButton = new Button("New Game");
 
+        // 'inputField' is the textField we created as a member variable above.
+        // first it would be nice if there was some prompt text in the box telling
+        // the user what to do (guess a number in this case). This will be deleted
+        // as soon as the textBox is clicked.
         inputField.setPromptText("Guess A Number");
+
+        // Lets set the width to 122 pixels just because it looks nice give our window size.
+        // Using the 'setMaxWidth' ensures that the textField will never be bigger than 122 pixels
+        // but can get smaller if the user resizes the window. If we didnt have this line the
+        // text Field would span the entire window up to the padding.
         inputField.setMaxWidth(122);
-        inputField.setOnKeyPressed(ke -> {
-            if (ke.getCode().equals(KeyCode.ENTER))
+
+        // One nice feature to have is when you enter a guess you might want to press the enter
+        // key instead of moving your mouse down the the 'Guess' button. This is fancy Java syntax
+        // called lambda functions. If you are interested you should look these up because they are
+        // ultra useful but a little too detail for me to get into here. Just know that what we are
+        // saying is "For this text Field when we press any key ('setOnKeyPressed'), check if the key
+        // that was pressed is the enter key. If it was, than go ahead and submit that to our guess
+        // method 'guessNum'. I will go into the guess method a bit later but this will handle actually
+        // making the guess and doing all the game logic.
+        inputField.setOnKeyPressed(key -> {
+            if (key.getCode().equals(KeyCode.ENTER))
             {
                 guessNum(inputField.getText());
             }
         });
 
+        // Here are some more lambda functions! Also this is how we make something happen when a button
+        // is pressed. The 'setOnAction' is how we invoke an action when a user presses the button and the
+        // code after the '->' is what actually happens. As you can see when the user presses the 'close'
+        // the program should close so we call 'window.close()'. The user also has an option to press the
+        // guess button if they'd like which does the same thing as when enter is pressed. Finally the newGame
+        // button calls another method we made called 'newGame'. This is all you need to make buttons do something
+        // and from now on when these buttons are pressed they will always call these methods.
         closeButton.setOnAction(e -> window.close());
         guessButton.setOnAction(e -> guessNum(inputField.getText()));
         newGameButton.setOnAction(e -> newGame());
 
+        // Now we add all these buttons to our HBox buttonBox.
         buttonBox.getChildren().addAll(newGameButton,guessButton,closeButton);
 
+        // Add the textField and buttonBox to our VBox
         mainContainer.getChildren().addAll(inputField,buttonBox);
 
+        // Now we can return these back up to start! lets go back to the start method
         return mainContainer;
     }
 
-    void newGame()
+    // Ok so When we actually click the guess button or press enter what happens?!?!
+    // This method performs all the game logic! Notice that we start with an argument
+    // a String called 'rawInput'. If you go back to our 'getCenterContainer' method
+    // you will see when we call this method we pass 'inputField.getText()' that
+    // method will grab whatever text is inside the textField when called and return
+    // it as a string. So essentially we are starting with 'rawInput' being whatever
+    // text is in the text field when we press enter or click guess.
+    void guessNum(String rawInput)
     {
-        gameOver = false;
-        guessesLeft.set(maxGuesses);
-        currentLowerBound.set(lowerBound);
-        currentUpperBound.set(upperBound);
-        answer = rnd.nextInt(upperBound)+lowerBound;
-        guessResponseLabel.setText("");
-        cheatLabel.setText("Cheat: 5000");
+        // Let's start with one of the most important things in software engineering,
+        // data validation. This means that we want to make sure what the user gives
+        // us is something we are expecting.
+
+        // If gameOver is true than it shouldn't matter if we press enter or click guess
+        // the game is over! so let's just immediately return. When we call 'return;'
+        // just like in C, we stop right there and skip anything else in the method.
+        if(gameOver == true)
+        {
+            return;
+        }
+
+        // Once the user clicks guess or presses enter we want to give them the impression
+        // that something actually happened. I good way to do this is to clear that text from
+        // the text field. This gives the illusion that the program 'ate' or 'took' the users
+        // input. It also prevents the user from manually having to delete their old guesses.
+        inputField.clear();
+
+        // You could imagine the user could enter a lot of wacky things into the textField so
+        // we will pass the rawInput strait into a new method that will return true if the
+        // input is valid or false if not. Lets go down to the 'sanitizeInput' method.
+        if(sanitizeInput(rawInput) == false)
+        {
+            return;
+        }
+
+        // So if we have not returned yet and made it here we know that the raw input is
+        // a valid guess! Since we know this when we call 'parseInt' this time we don't need
+        // to catch any exceptions. Lets just grab the input and store it as an integer in
+        // this 'guess' int I made here.
+        int guess = Integer.parseInt(rawInput);
+
+        // Since this is a valid guess than we need to decrement the number of guesses
+        // the user has left. This might seem a bit wonky but remember we are using
+        // the simpleIntegerProperty! so we need to first get the value, subtract 1 from it
+        // and then set it again. This is how you do that.
+        guessesLeft.set(guessesLeft.get()-1);
+
+        // At this point the user just guessed a number and we need to see if they even have
+        // any moves left. If they don't and the guess they just made is wrong we have to tell
+        // them they lost, set gameOver to true, and return :(. This if statement says
+        // "If the guesses left is less than 1 and the guess is not equal to the answer
+        // go ahead and execute the code in the if statement.
+        if(guessesLeft.get() < 1 && guess != answer)
+        {
+            // If the user just lost lets let them know what the answer was and give them a
+            // sad red message. Here the '\n' is a newline character and the '+' means add
+            // the value of answer onto the back of the string (concatenation)
+            guessResponseLabel.setText("You didn't guess it :(\nThe number was: " + answer);
+            guessResponseLabel.setStyle("-fx-font-size: 18; -fx-text-fill: RED");
+
+            // Now we just set the gameOver boolean to true since the game is over and
+            // return! nothing left to do in this method
+            gameOver = true;
+
+            return;
+        }
+
+
+        // If we are here the user either has more moves left or has just won the game!
+        // This is really the core of the game, if the user guesses a number too high
+        // let them know it was too high, if it was too low let them know!
+
+        if(guess > answer) // The guess was too high!
+        {
+            // Let the user know by setting the labels
+            guessResponseLabel.setText("Guess was too high!");
+            guessResponseLabel.setStyle("-fx-font-size: 18; -fx-text-fill: ORANGE");
+
+            // Set the upper bound label to the guess they just made
+            currentUpperBound.set(guess);
+
+            // This will calculate the optimal guess using the formula we talked about
+            // in the beginning. We will look at this function later.
+            setCheat();
+        }
+        else if(guess < answer) // The guess was too low!
+        {
+            // Let the user know by setting the labels
+            guessResponseLabel.setText("Guess was too low!");
+            guessResponseLabel.setStyle("-fx-font-size: 18; -fx-text-fill: #1f8ece");
+
+            // set the lower bound label to the guess they just made
+            currentLowerBound.set(guess);
+
+            // This will calculate the optimal guess using the formula we talked about
+            // in the beginning. We will look at this function later.
+            setCheat();
+        }
+        // If neither of the two statements above were true, the user must have guessed
+        // the correct the right answer! so lets let them know they won, what the number
+        // was, as well as set the gameOver boolean to true.
+        else
+        {
+            guessResponseLabel.setText("You guessed it!!\nThe number was: " + answer);
+            guessResponseLabel.setStyle("-fx-font-size: 18; -fx-text-fill: GREEN");
+
+            gameOver = true;
+        }
+
+        // That is really all of the game logic! Let's hop down into the 'setCheat' method
+
     }
 
+    // So we are starting with the rawInput and I named the argument 'input' just to
+    // show that the arguments do not need to be named the same thing as when they
+    // are passed into the method.
     boolean sanitizeInput(String input)
     {
+        // We kinda need the guess to be a number even thought right now it is a string
+        // lets create this guess integer as a variable to store any values we extract
         int guess;
 
+        // A simple way to check if a string is a number is to try to use the built in
+        // Integer.parseInt() method built into the Integer class. The great thing about this
+        // is that this class handles everything including checking to see if we passed an
+        // empty string, letters not numbers, letters and numbers, etc. Anything the user
+        // can type into the input field 'parseInt' will either read as an integer or throw
+        // an exception at. This 'Try/Catch' code might be unfamiliar if you are coming from C.
+        // One of the great things about Java as opposed to C is that instead of throwing a
+        // generic 'segfault' when something is wrong, Java will throw exceptions. These can be
+        // thrown anyway and can tell the programmer what exactly went wrong and where it happened.
+        // If you ever plan on using Java, exceptions are an essential tool that are worth learning
+        // about!!. For now this means "Try to parse our inout string into an integer and if
+        // something goes wrong I will catch your exception (this method will throw the
+        // 'NumberFormatException'. The nice thing about using try catch is that if an exception is
+        // thrown we can specify what we want to do about it. So if everything goes well than our
+        // 'guess' int now stores the integer value of the input string. If not than we need to let
+        // the user know that something went wrong.
         try
         {
             guess = Integer.parseInt(input);
         }
         catch (NumberFormatException e)
         {
+            // If the user did not enter a valid number set the response label to the following
+            // text and change the font size and color to red.
             guessResponseLabel.setText("Input was not a number");
             guessResponseLabel.setStyle("-fx-font-size: 18; -fx-text-fill: RED");
 
+            // We know the input is not valid so return false! we don't need to check anything else
             return false;
         }
+
+        // If we get to here that means they user actually entered a number which is great but now
+        // we need to figure out if that number is in between the bounds! If we are guessing a number
+        // between 10 and 50 but the user enters 499, we dont want to count that as a guess. Instead
+        // lets tell the user they need to enter a number between the bounds! This if statement
+        // reads as this: "If the value of guess is greater than our upper bound Or the value of guess
+        // is less the lower bound". Simpler "If the guess is outside our interval perform the code
+        // under this if statement.
 
         if(guess > currentUpperBound.get() || guess < currentLowerBound.get())
         {
@@ -248,9 +785,19 @@ public class guessingGame extends Application
             return false;
         }
 
+        // If we made it here than good news! the input was a number and it is valid! lets return
+        // true and jump back up to 'guessNum'
+
         return true;
     }
 
+    // All this method does is calculate the optimal guess using the formula we talked about
+    // earlier and then sets the cheatLabel to reflect the number. Everytime a user guesses
+    // a number they optimal guess naturally changes so this is just a handy method to
+    // automatically update our cheat label without having to type this code a bunch of times.
+    // We can also call this method regardless of whether cheatMode is set to true since if
+    // it is false the label is not on the GUI so we can update it all we want.
+    // Finally lets hop to the 'newGame' method!
     void setCheat()
     {
         int cheatNum = (currentUpperBound.get()-currentLowerBound.get())/2 + currentLowerBound.get();
@@ -259,55 +806,34 @@ public class guessingGame extends Application
     }
 
 
-    void guessNum(String raw)
+    // OK PHEW!!! we made it! this is the last method in the program. If you made it here congratulations
+    // and thank you for following along with me :). This method will need to reset everything to a new
+    // game state just like if you started the program. This means resetting all of the information on the
+    // labels, setting our gameOver boolean back to false, and generating a new answer. The button can be
+    // pressed at anytime so this doubles as a reset method.
+    void newGame()
     {
-        if(gameOver)
-        {
-            return;
-        }
+        // Everything here you should have seen before so I won't go
+        // into to detail but we do the following.
+        // 1. Set gameOver to false
+        // 2. Update the guesses left label to our maxGuesses variable
+        // 3. set the upper and lower bounds labels to our default variables
+        // 4. generate a new random answer within our upper and lower bounds
+        // 5. Set the response label to an empty string (display nothing)
+        // 6. Reset the cheat label
 
-        inputField.clear();
-
-        if(!sanitizeInput(raw))
-        {
-            return;
-        }
-
-        int guess = Integer.parseInt(raw);
-
-        guessesLeft.set(guessesLeft.get()-1);
-
-        if(guessesLeft.get() < 1 && guess != answer)
-        {
-            guessResponseLabel.setText("You didn't guess it :(\nThe number was: " + answer);
-            guessResponseLabel.setStyle("-fx-font-size: 18; -fx-text-fill: RED");
-
-            gameOver = true;
-
-            return;
-        }
-
-        if(guess > answer)
-        {
-            guessResponseLabel.setText("Guess was too high!");
-            guessResponseLabel.setStyle("-fx-font-size: 18; -fx-text-fill: ORANGE");
-            currentUpperBound.set(guess);
-            setCheat();
-        }
-        else if(guess < answer)
-        {
-            guessResponseLabel.setText("Guess was too low!");
-            guessResponseLabel.setStyle("-fx-font-size: 18; -fx-text-fill: #1f8ece");
-            currentLowerBound.set(guess);
-            setCheat();
-        }
-        else
-        {
-            guessResponseLabel.setText("You guessed it!!\nThe number was: " + answer);
-            guessResponseLabel.setStyle("-fx-font-size: 18; -fx-text-fill: GREEN");
-
-            gameOver = true;
-        }
-
+        gameOver = false;
+        guessesLeft.set(maxGuesses);
+        currentLowerBound.set(lowerBound);
+        currentUpperBound.set(upperBound);
+        answer = rnd.nextInt(upperBound)+lowerBound;
+        guessResponseLabel.setText("");
+        cheatLabel.setText("Cheat: " + (((upperBound-lowerBound)/2)+1));
     }
+
+    // I really hope this walk through gave you some insight into how GUIs
+    // are build and cleared up any ambiguity you had. If you are reading this
+    // before the workshop I hope to see you there and if you are reading it after
+    // thank you for coming!
+
 }
